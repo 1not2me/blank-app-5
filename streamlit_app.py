@@ -13,22 +13,23 @@ def extract_text_from_pdf(pdf_path):
     try:
         with open(pdf_path, 'rb') as file:
             reader = PyPDF2.PdfReader(file)
-            for page_num in range(len(reader.pages)):
-                page = reader.pages[page_num]
-                text += page.extract_text()
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text
     except FileNotFoundError:
         return "שגיאה: קובץ PDF לא נמצא."
     except Exception as e:
         return f"שגיאה בעיבוד PDF: {e}"
-    return text
+    return text if text else "לא נמצא טקסט בקובץ PDF."
 
 def extract_text_from_url(url):
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for bad status codes
+        response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
-        text_parts = soup.find_all('p')  # ברירת מחדל: חילוץ פסקאות, ניתן לשנות בהתאם לצורך
-        text = '\n'.join([part.get_text() for part in text_parts])
+        text_parts = soup.find_all('p')
+        text = '\n'.join([part.get_text(strip=True) for part in text_parts])
         return text
     except requests.exceptions.RequestException as e:
         return f"שגיאה בהבאת URL: {e}"
@@ -36,14 +37,13 @@ def extract_text_from_url(url):
         return f"שגיאה בעיבוד דף אינטרנט: {e}"
 
 def summarize_text_with_openai(text, summary_length="קצר", max_tokens=150):
-    prompt = f"תמצת את הטקסט הבא בצורה {summary_length}:"
+    prompt = f"תמצת את הטקסט הבא בצורה {summary_length}:\n\n{text}"
     try:
         response = openai.Completion.create(
-            model="gpt-3.5-turbo-instruct",  # מודל מומלץ לטקסט פשוט
-            prompt=prompt + "\n\n" + text,
+            model="text-davinci-003",  # מדויק יותר מ-gpt-3.5-turbo-instruct
+            prompt=prompt,
             max_tokens=max_tokens,
             n=1,
-            stop=None,
             temperature=0.7,
         )
         if response.choices:
@@ -54,10 +54,10 @@ def summarize_text_with_openai(text, summary_length="קצר", max_tokens=150):
         return f"שגיאה בשירות OpenAI: {e}"
 
 def main():
-    source_type = input("הזן 'file' כדי להעלות קובץ או 'url' עבור כתובת אינטרנט: ").lower()
+    source_type = input("הזן 'file' כדי להעלות קובץ או 'url' עבור כתובת אינטרנט: ").strip().lower()
 
     if source_type == 'file':
-        file_path = input("הזן את נתיב הקובץ (PDF או TXT): ")
+        file_path = input("הזן את נתיב הקובץ (PDF או TXT): ").strip()
         if file_path.lower().endswith('.pdf'):
             text = extract_text_from_pdf(file_path)
         elif file_path.lower().endswith('.txt'):
@@ -71,7 +71,7 @@ def main():
         else:
             text = "שגיאה: פורמט קובץ לא נתמך. אנא בחר PDF או TXT."
     elif source_type == 'url':
-        url = input("הזן את כתובת האינטרנט (URL): ")
+        url = input("הזן את כתובת האינטרנט (URL): ").strip()
         text = extract_text_from_url(url)
     else:
         print("קלט לא חוקי.")
@@ -79,8 +79,8 @@ def main():
 
     if text and not text.startswith("שגיאה"):
         print("\nטקסט שחולץ:")
-        print(text[:500] + "..." if len(text) > 500 else text) # הצגת חלק מהטקסט
-        summary_length = input("הזן את אורך הסיכום הרצוי (קצר/בינוני/מפורט): ").lower()
+        print(text[:500] + "..." if len(text) > 500 else text)
+        summary_length = input("הזן את אורך הסיכום הרצוי (קצר/בינוני/מפורט): ").strip().lower()
         if summary_length == "קצר":
             max_tokens = 150
         elif summary_length == "בינוני":
